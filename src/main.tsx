@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import './index.css'
 import { SupabaseProvider } from './lib/supabase/SupabaseProvider'
+import { ProjectProvider } from './lib/context/ProjectContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,7 +21,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <SupabaseProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <App />
+          <ProjectProvider>
+            <App />
+          </ProjectProvider>
         </BrowserRouter>
       </QueryClientProvider>
     </SupabaseProvider>

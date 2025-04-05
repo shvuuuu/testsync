@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useSupabase } from '../lib/supabase/SupabaseProvider';
-import { FiBarChart2, FiFileText, FiList, FiPlay, FiCalendar, FiPieChart, FiSettings, FiExternalLink, FiChevronDown, FiChevronRight, FiMenu, FiX, FiLogOut } from 'react-icons/fi';
+import { FiBarChart2, FiFileText, FiList, FiPlay, FiCalendar, FiPieChart, FiSettings, FiExternalLink, FiMenu, FiX, FiLogOut } from 'react-icons/fi';
+import ProjectSelector from '../components/ProjectSelector';
 
 const MainLayout = () => {
-  const { supabase, session } = useSupabase();
+  const { supabase } = useSupabase();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isProjectsOpen, setIsProjectsOpen] = useState(true);
+
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -37,26 +38,7 @@ const MainLayout = () => {
 
         {/* Sidebar Content */}
         <div className="flex-1 overflow-y-auto py-4">
-          <div className="px-4 mb-4">
-            <button
-              onClick={() => setIsProjectsOpen(!isProjectsOpen)}
-              className="flex items-center justify-between w-full text-left text-gray-700 font-medium"
-            >
-              <span>Projects</span>
-              {isProjectsOpen ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-            </button>
-            
-            {isProjectsOpen && isSidebarOpen && (
-              <div className="mt-2 pl-2">
-                <div className="flex items-center p-2 rounded-md bg-blue-50 text-blue-700">
-                  <div className="w-6 h-6 flex items-center justify-center bg-white rounded border border-gray-200 mr-2">
-                    <span className="text-xs font-medium">D</span>
-                  </div>
-                  <span className="font-medium">Demo Project</span>
-                </div>
-              </div>
-            )}
-          </div>
+          <ProjectSelector isSidebarOpen={isSidebarOpen} />
 
           <nav className="px-2">
             <NavLink 
@@ -143,7 +125,7 @@ const MainLayout = () => {
 
             <a 
               href="#" 
-              className="flex items-center px-2 py-2 rounded-md text-gray-700 hover:bg-gray-100 ${!isSidebarOpen && 'justify-center'}"
+              className={`flex items-center px-2 py-2 rounded-md text-gray-700 hover:bg-gray-100 ${!isSidebarOpen && 'justify-center'}`}
             >
               <FiExternalLink size={20} className="min-w-[20px]" />
               {isSidebarOpen && <span className="ml-3">View Documentation</span>}

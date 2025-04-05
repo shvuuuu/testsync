@@ -21,7 +21,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await signIn(email, password);
+      const { error } = await signIn(email, password);
 
       if (error) throw error;
       navigate('/dashboard');
