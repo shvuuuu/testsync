@@ -495,7 +495,7 @@ const Settings = () => {
       }
       
       // Check if notification preferences exist for this user
-      const { data: existingPrefs, error: checkError } = await supabase
+      const { data, error: checkError } = await supabase
         .from('notification_preferences')
         .select('id')
         .eq('user_id', session.user.id)

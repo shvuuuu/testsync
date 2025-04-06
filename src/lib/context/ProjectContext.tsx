@@ -92,6 +92,32 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       if (!session?.user?.id) {
         throw new Error('User not authenticated');
       }
+      
+      // Validate inputs
+      if (!name.trim()) {
+        throw new Error('Project name is required');
+      }
+      
+      if (!key.trim()) {
+        throw new Error('Project key is required');
+      }
+      
+      if (key.length < 2 || key.length > 10) {
+        throw new Error('Project key must be between 2 and 10 characters');
+      }
+
+      // Check if project key already exists
+      const { data: existingProject, error: checkError } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('key', key.toUpperCase())
+        .maybeSingle();
+        
+      if (checkError) throw checkError;
+      
+      if (existingProject) {
+        throw new Error('A project with this key already exists');
+      }
 
       const { data, error } = await supabase
         .from('projects')
@@ -111,7 +137,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       console.error('Error creating project:', err);
       setError(err.message);
-      return null;
+      throw err; // Re-throw to allow component to handle the error
     }
   };
 

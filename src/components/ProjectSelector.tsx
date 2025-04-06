@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FiChevronDown, FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import { FiChevronDown, FiPlus, FiEdit2, FiTrash2, FiAlertCircle } from 'react-icons/fi';
 import { useProject } from '../lib/context/ProjectContext';
 
 interface ProjectSelectorProps {
@@ -14,6 +14,8 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectKey, setNewProjectKey] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [formErrors, setFormErrors] = useState<{name?: string; key?: string; general?: string}>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
@@ -30,31 +32,83 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
     };
   }, []);
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim() || !newProjectKey.trim()) return;
+  const validateProjectForm = () => {
+    const errors: {name?: string; key?: string} = {};
+    
+    if (!newProjectName.trim()) {
+      errors.name = 'Project name is required';
+    }
+    
+    if (!newProjectKey.trim()) {
+      errors.key = 'Project key is required';
+    } else if (newProjectKey.length < 2) {
+      errors.key = 'Project key must be at least 2 characters';
+    } else if (newProjectKey.length > 10) {
+      errors.key = 'Project key must be at most 10 characters';
+    }
+    
+    return errors;
+  };
 
-    const newProject = await createProject(newProjectName, newProjectKey, newProjectDescription);
-    if (newProject) {
-      setCurrentProject(newProject);
-      setNewProjectName('');
-      setNewProjectKey('');
-      setNewProjectDescription('');
-      setIsCreateModalOpen(false);
+  const handleCreateProject = async () => {
+    // Reset errors
+    setFormErrors({});
+    
+    // Validate form
+    const errors = validateProjectForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      const newProject = await createProject(newProjectName, newProjectKey, newProjectDescription);
+      
+      if (newProject) {
+        setCurrentProject(newProject);
+        setNewProjectName('');
+        setNewProjectKey('');
+        setNewProjectDescription('');
+        setIsCreateModalOpen(false);
+      }
+    } catch (error: any) {
+      // Handle specific error cases
+      if (error.message?.includes('duplicate key')) {
+        setFormErrors({ key: 'This project key is already in use' });
+      } else {
+        setFormErrors({ general: error.message || 'Failed to create project' });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleEditProject = async () => {
-    if (!currentProject || !newProjectName.trim()) return;
+    // Reset errors
+    setFormErrors({});
+    
+    if (!currentProject || !newProjectName.trim()) {
+      setFormErrors({ name: 'Project name is required' });
+      return;
+    }
 
-    const success = await updateProject(currentProject.id, {
-      name: newProjectName,
-      description: newProjectDescription
-    });
+    try {
+      setIsSubmitting(true);
+      const success = await updateProject(currentProject.id, {
+        name: newProjectName,
+        description: newProjectDescription
+      });
 
-    if (success) {
-      setNewProjectName('');
-      setNewProjectDescription('');
-      setIsEditModalOpen(false);
+      if (success) {
+        setNewProjectName('');
+        setNewProjectDescription('');
+        setIsEditModalOpen(false);
+      }
+    } catch (error: any) {
+      setFormErrors({ general: error.message || 'Failed to update project' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -62,7 +116,14 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
     if (!currentProject) return;
 
     if (window.confirm(`Are you sure you want to delete ${currentProject.name}? This action cannot be undone.`)) {
-      await deleteProject(currentProject.id);
+      try {
+        setIsSubmitting(true);
+        await deleteProject(currentProject.id);
+      } catch (error: any) {
+        alert(`Failed to delete project: ${error.message || 'Unknown error'}`);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -165,28 +226,40 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Create New Project</h2>
             
+            {formErrors.general && (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md flex items-start">
+                <FiAlertCircle className="mr-2 mt-0.5 flex-shrink-0" />
+                <span>{formErrors.general}</span>
+              </div>
+            )}
+            
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Project Name <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
-                className="input w-full" 
+                className={`input w-full ${formErrors.name ? 'border-red-500' : ''}`}
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
                 placeholder="My New Project"
               />
+              {formErrors.name && <p className="mt-1 text-xs text-red-500">{formErrors.name}</p>}
             </div>
             
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Project Key <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
-                className="input w-full uppercase" 
+                className={`input w-full uppercase ${formErrors.key ? 'border-red-500' : ''}`}
                 value={newProjectKey}
                 onChange={(e) => setNewProjectKey(e.target.value.replace(/[^A-Za-z0-9]/g, ''))}
                 placeholder="PRJ"
                 maxLength={10}
               />
-              <p className="text-xs text-gray-500 mt-1">2-10 characters, letters and numbers only</p>
+              {formErrors.key ? (
+                <p className="mt-1 text-xs text-red-500">{formErrors.key}</p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">2-10 characters, letters and numbers only</p>
+              )}
             </div>
             
             <div className="mb-6">
@@ -210,9 +283,9 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
               <button 
                 className="btn btn-primary"
                 onClick={handleCreateProject}
-                disabled={!newProjectName.trim() || !newProjectKey.trim() || newProjectKey.length < 2}
+                disabled={isSubmitting || !newProjectName.trim() || !newProjectKey.trim() || newProjectKey.length < 2}
               >
-                Create Project
+                {isSubmitting ? 'Creating...' : 'Create Project'}
               </button>
             </div>
           </div>
@@ -225,14 +298,22 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Edit Project</h2>
             
+            {formErrors.general && (
+              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md flex items-start">
+                <FiAlertCircle className="mr-2 mt-0.5 flex-shrink-0" />
+                <span>{formErrors.general}</span>
+              </div>
+            )}
+            
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Project Name <span className="text-red-500">*</span></label>
               <input 
                 type="text" 
-                className="input w-full" 
+                className={`input w-full ${formErrors.name ? 'border-red-500' : ''}`}
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
               />
+              {formErrors.name && <p className="mt-1 text-xs text-red-500">{formErrors.name}</p>}
             </div>
             
             <div className="mb-4">
@@ -266,9 +347,9 @@ const ProjectSelector = ({ isSidebarOpen }: ProjectSelectorProps) => {
               <button 
                 className="btn btn-primary"
                 onClick={handleEditProject}
-                disabled={!newProjectName.trim()}
+                disabled={isSubmitting || !newProjectName.trim()}
               >
-                Save Changes
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

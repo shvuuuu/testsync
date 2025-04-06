@@ -102,15 +102,7 @@ const MainLayout = () => {
             </NavLink>
           </nav>
 
-          {isSidebarOpen && (
-            <div className="mt-8 mx-4 p-4 bg-gray-50 rounded-lg">
-              <h3 className="font-medium text-gray-800 mb-2">Have questions?</h3>
-              <p className="text-sm text-gray-600 mb-3">Unlock the full potential of Test Management</p>
-              <button className="text-sm text-blue-600 font-medium flex items-center">
-                Contact Sales
-              </button>
-            </div>
-          )}
+          {/* Promotional section removed */}
 
           <div className="mt-4 px-2">
             <NavLink 
