@@ -1,92 +1,199 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSupabase } from '../lib/supabase/SupabaseProvider';
+import { useProject } from '../lib/context/ProjectContext';
+import { useTestCase } from '../lib/context/TestCaseContext';
 import { FiDownload, FiFilter, FiChevronRight, FiFolder, FiPlus, FiSearch } from 'react-icons/fi';
+import { Folder as FolderType, TestCase as TestCaseType } from '../lib/services/testCaseService';
 
-interface Folder {
-  id: string;
-  name: string;
-  testCount: number;
-  automationCount: number;
-}
-
-interface TestCase {
-  id: string;
-  title: string;
-  type: string;
-  automationStatus: string;
-  state: string;
-  priority: string;
-  owner: string;
-  createdAt: string;
-  updatedAt: string;
+// Using the types from our service
+interface TestCaseDisplay extends TestCaseType {
+  owner_name?: string;
 }
 
 const TestCases = () => {
-  const { supabase } = useSupabase();
+  const { } = useSupabase(); // Not using supabase directly in this component
+  const { currentProject } = useProject();
+  const { 
+    testCases, 
+    folders, 
+    isLoading, 
+    totalTestCases, 
+    selectedFolder, 
+    setSelectedFolder,
+    createTestCase,
+    refreshFolders,
+    createFolder
+  } = useTestCase();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
-  const [folders, setFolders] = useState<Folder[]>([
-    { id: 'automation', name: 'Automation', testCount: 10, automationCount: 8 },
-    { id: 'authentication', name: 'Authentication', testCount: 21, automationCount: 10 },
-    { id: 'administration', name: 'Administration', testCount: 0, automationCount: 0 },
-    { id: 'configuration', name: 'Configuration', testCount: 11, automationCount: 2 },
-    { id: 'users', name: 'Users', testCount: 13, automationCount: 1 },
-    { id: 'usability', name: 'Usability', testCount: 17, automationCount: 7 },
-    { id: 'performance', name: 'Performance', testCount: 14, automationCount: 4 },
-    { id: 'security', name: 'Security', testCount: 6, automationCount: 0 },
-  ]);
-  const [totalTestCases, setTotalTestCases] = useState(196);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [newTestCaseName, setNewTestCaseName] = useState('');
-  const [showEmptyState, setShowEmptyState] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredTestCases, setFilteredTestCases] = useState<TestCaseDisplay[]>([]);
+  
+  // Add state for folder modal
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  
+  // Add state for filter modal and filter options
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    priority: 'all',
+    type: 'all',
+    automation: 'all'
+  });
+  
+  // Check if we should show the empty state
+  const showEmptyState = testCases.length === 0 && !isLoading;
 
-  // Fetch test cases data
+  // Handle folder selection from URL params
   useEffect(() => {
-    const fetchTestCasesData = async () => {
-      setIsLoading(true);
-      try {
-        // In a real implementation, we would fetch this data from Supabase
-        // For now, we're using the mock data initialized in state
-        
-        // Example of how to fetch data from Supabase:
-        // const { data: foldersData, error: foldersError } = await supabase
-        //   .from('folders')
-        //   .select('id, name, project_id');
-        
-        // if (foldersError) throw foldersError;
-        
-        // Process the data and update state
-        // setFolders(...);
-        
-        // Simulate loading
-        setTimeout(() => {
-          setIsLoading(false);
-        }, 500);
-      } catch (error) {
-        console.error('Error fetching test cases data:', error);
-        setIsLoading(false);
+    const folderIdFromUrl = searchParams.get('folder');
+    if (folderIdFromUrl && folders.length > 0) {
+      const folder = folders.find(f => f.id === folderIdFromUrl);
+      if (folder) {
+        setSelectedFolder(folder);
       }
-    };
+    }
+  }, [searchParams, folders, setSelectedFolder]);
 
-    fetchTestCasesData();
-  }, [supabase]);
+  // Process test cases for display
+  useEffect(() => {
+    // Apply search filter if needed
+    let filtered = [...testCases];
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(tc => 
+        tc.id.toLowerCase().includes(query) || 
+        tc.title.toLowerCase().includes(query)
+      );
+    }
 
-  const handleCreateTestCase = () => {
-    if (newTestCaseName.trim()) {
-      // In a real implementation, we would create a new test case in Supabase
-      // For now, we're just updating the UI
-      setShowEmptyState(false);
-      setNewTestCaseName('');
+    // Apply additional filters
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(tc => tc.state === filters.status);
+    }
+    
+    if (filters.priority !== 'all') {
+      filtered = filtered.filter(tc => tc.priority === filters.priority);
+    }
+    
+    if (filters.type !== 'all') {
+      filtered = filtered.filter(tc => tc.type === filters.type);
+    }
+    
+    if (filters.automation !== 'all') {
+      filtered = filtered.filter(tc => tc.automation_status === filters.automation);
+    }
+
+    // Map to display format
+    const displayTestCases: TestCaseDisplay[] = filtered.map(tc => ({
+      ...tc,
+      owner_name: 'Assigned User' // In a real app, you'd fetch user names
+    }));
+
+    setFilteredTestCases(displayTestCases);
+  }, [testCases, searchQuery, filters]);
+
+  // Create a new test case with basic info
+  const handleCreateTestCase = async () => {
+    if (!newTestCaseName.trim() || !currentProject) return;
+    
+    try {
+      await createTestCase({
+        title: newTestCaseName,
+        description: '',
+        preconditions: '',
+        steps: '',
+        expected_results: '',
+        state: 'Active',
+        priority: 'Medium',
+        type: 'Functional',
+        automation_status: 'Not Automated',
+        tags: [],
+        project_id: currentProject.id,
+        folder_id: selectedFolder?.id || null,
+        owner_id: null // This would be set to the current user in a real app
+      });
       
-      // Navigate to test case creation form
+      setNewTestCaseName('');
       navigate('/test-cases/new');
+    } catch (err) {
+      console.error('Error creating test case:', err);
     }
   };
 
-  const handleGenerateWithAI = () => {
-    // Navigate to AI generation page or open modal
-    navigate('/test-cases/generate-ai');
+  // Handle folder selection
+  const handleFolderClick = (folder: FolderType) => {
+    setSelectedFolder(folder);
+    setSearchParams({ folder: folder.id });
   };
+
+  // Clear folder selection
+  const handleAllTestCasesClick = () => {
+    setSelectedFolder(null);
+    setSearchParams({});
+  };
+
+  // Add folder creation function
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || !currentProject) return;
+    
+    try {
+      await createFolder({
+        name: newFolderName,
+        project_id: currentProject.id,
+        parent_id: null
+      });
+      
+      setNewFolderName('');
+      setShowFolderModal(false);
+      await refreshFolders();
+    } catch (err) {
+      console.error('Error creating folder:', err);
+    }
+  };
+
+  // Handle filter changes
+  const handleFilterChange = (filterType: string, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
+
+  // Reset filters
+  const handleResetFilters = () => {
+    setFilters({
+      status: 'all',
+      priority: 'all',
+      type: 'all',
+      automation: 'all'
+    });
+  };
+
+  // Handle AI generation
+  const handleGenerateWithAI = () => {
+    // In a real implementation, this would open an AI generation modal or page
+    alert('AI generation would be implemented here');
+  };
+
+  // Import/export handlers are defined but not currently used in the UI
+  // Keeping them commented for future implementation
+  /*
+  const handleExport = () => {
+    alert('Export functionality would be implemented here');
+  };
+
+  const handleQuickImport = () => {
+    alert('Quick import functionality would be implemented here');
+  };
+
+  const handleCsvImport = () => {
+    alert('CSV import functionality would be implemented here');
+  };
+  */
 
   return (
     <div className="p-6">
@@ -113,7 +220,10 @@ const TestCases = () => {
           <div className="card p-4 mb-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-gray-700">Folders</h3>
-              <button className="p-1 rounded-md hover:bg-gray-100">
+              <button 
+                className="p-1 rounded-md hover:bg-gray-100"
+                onClick={() => setShowFolderModal(true)}
+              >
                 <FiFolder size={16} />
               </button>
             </div>
@@ -126,11 +236,23 @@ const TestCases = () => {
             </div>
 
             <div className="space-y-1">
+              <div 
+                className={`flex items-center justify-between p-2 rounded-md hover:bg-gray-100 cursor-pointer ${!selectedFolder ? 'bg-blue-50 text-blue-700' : ''}`}
+                onClick={handleAllTestCasesClick}
+              >
+                <div className="flex items-center">
+                  <FiChevronRight size={16} className="text-gray-400 mr-2" />
+                  <span className="text-sm font-medium">All Test Cases</span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  <span>{totalTestCases}</span>
+                </div>
+              </div>
               {folders.map((folder) => (
                 <div 
                   key={folder.id} 
                   className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100 cursor-pointer"
-                  onClick={() => navigate(`/test-cases?folder=${folder.id}`)}
+                  onClick={() => handleFolderClick(folder)}
                 >
                   <div className="flex items-center">
                     <FiChevronRight size={16} className="text-gray-400 mr-2" />
@@ -138,9 +260,9 @@ const TestCases = () => {
                     <span className="text-sm">{folder.name}</span>
                   </div>
                   <div className="text-xs text-gray-500">
-                    {folder.testCount > 0 ? (
+                    {folder.test_count && folder.test_count > 0 ? (
                       <span>
-                        {folder.automationCount}({folder.testCount})
+                        {folder.automation_count ?? 0}({folder.test_count})
                       </span>
                     ) : (
                       <span>0</span>
@@ -176,9 +298,14 @@ const TestCases = () => {
                 type="text"
                 placeholder="Search by Test Case ID or Title"
                 className="input pl-10 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button className="btn btn-outline flex items-center space-x-1 text-sm ml-2">
+            <button 
+              className="btn btn-outline flex items-center space-x-1 text-sm ml-2"
+              onClick={() => setShowFilterModal(true)}
+            >
               <FiFilter size={16} />
               <span>Filter</span>
             </button>
@@ -236,14 +363,224 @@ const TestCases = () => {
             </div>
           ) : (
             <div className="card">
-              {/* Test cases table would go here */}
-              <div className="p-4 text-center text-gray-500">
-                Test cases table would be displayed here
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ID
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Title
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Priority
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Automation
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Owner
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredTestCases.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-4 text-center text-sm text-gray-500">
+                          No test cases found. Try adjusting your search or filter criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredTestCases.map((testCase) => (
+                        <tr key={testCase.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/test-cases/${testCase.id}`)}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {testCase.id.substring(0, 8)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {testCase.title}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${testCase.state === 'Active' ? 'bg-green-100 text-green-800' : testCase.state === 'Draft' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'}`}>
+                              {testCase.state}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${testCase.priority === 'Critical' ? 'bg-red-100 text-red-800' : testCase.priority === 'High' ? 'bg-orange-100 text-orange-800' : testCase.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                              {testCase.priority}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {testCase.type}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${testCase.automation_status === 'Automated' ? 'bg-green-100 text-green-800' : testCase.automation_status === 'Partially Automated' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>
+                              {testCase.automation_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {testCase.owner_name || 'Unassigned'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button 
+                              className="text-indigo-600 hover:text-indigo-900 mr-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/test-cases/${testCase.id}`);
+                              }}
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Folder creation modal */}
+      {showFolderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Folder</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Folder Name</label>
+              <input
+                type="text"
+                className="input w-full"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Enter folder name"
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <button 
+                className="btn btn-outline"
+                onClick={() => {
+                  setNewFolderName('');
+                  setShowFolderModal(false);
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={handleCreateFolder}
+                disabled={!newFolderName.trim()}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Filter Test Cases</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select 
+                  className="input w-full"
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Active">Active</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Deprecated">Deprecated</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                <select 
+                  className="input w-full"
+                  value={filters.priority}
+                  onChange={(e) => handleFilterChange('priority', e.target.value)}
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select 
+                  className="input w-full"
+                  value={filters.type}
+                  onChange={(e) => handleFilterChange('type', e.target.value)}
+                >
+                  <option value="all">All Types</option>
+                  <option value="Functional">Functional</option>
+                  <option value="Performance">Performance</option>
+                  <option value="Security">Security</option>
+                  <option value="Usability">Usability</option>
+                  <option value="Acceptance">Acceptance</option>
+                  <option value="Accessibility">Accessibility</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Automation Status</label>
+                <select 
+                  className="input w-full"
+                  value={filters.automation}
+                  onChange={(e) => handleFilterChange('automation', e.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Automated">Automated</option>
+                  <option value="Partially Automated">Partially Automated</option>
+                  <option value="Not Automated">Not Automated</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2 mt-6">
+              <button 
+                className="btn btn-outline"
+                onClick={handleResetFilters}
+              >
+                Reset
+              </button>
+              <button 
+                className="btn btn-outline"
+                onClick={() => setShowFilterModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={() => setShowFilterModal(false)}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

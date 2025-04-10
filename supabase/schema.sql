@@ -214,10 +214,11 @@ create policy "Users can view project members" on project_members
   for select using (
     exists (
       select 1 from projects
-      where id = project_id and (
-        owner_id = auth.uid() or
-        auth.uid() IN (select user_id from project_members where project_id = projects.id)
-      )
+      where id = project_id and owner_id = auth.uid()
+    ) or
+    auth.uid() in (
+      select user_id from project_members
+      where project_id = project_members.project_id
     )
   );
 
@@ -226,11 +227,14 @@ create policy "Project owners and admins can manage project members" on project_
   for all using (
     exists (
       select 1 from projects
-      where id = project_id and (
-        owner_id = auth.uid() or
-        auth.uid() IN (select user_id from project_members where project_id = projects.id and role = 'admin') or
-        exists (select 1 from profiles where id = auth.uid() and is_admin = true)
-      )
+      where id = project_id and owner_id = auth.uid()
+    ) or
+    exists (
+      select 1 from profiles where id = auth.uid() and is_admin = true
+    ) or
+    auth.uid() in (
+      select user_id from project_members
+      where project_id = project_members.project_id and role = 'admin'
     )
   );
 

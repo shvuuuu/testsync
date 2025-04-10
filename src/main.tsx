@@ -6,6 +6,7 @@ import App from './App'
 import './index.css'
 import { SupabaseProvider } from './lib/supabase/SupabaseProvider'
 import { ProjectProvider } from './lib/context/ProjectContext'
+import { TestCaseProvider } from './lib/context/TestCaseContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +23,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <ProjectProvider>
-            <App />
+            <TestCaseProvider>
+              <App />
+            </TestCaseProvider>
           </ProjectProvider>
         </BrowserRouter>
       </QueryClientProvider>

@@ -7,8 +7,8 @@
 You already have your Supabase URL and anon key in your `.env` file. Make sure your Supabase project is properly set up:
 
 ```
-VITE_SUPABASE_URL=https://arapkqxlarhglyopfcts.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyYXBrcXhsYXJoZ2x5b3BmY3RzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4Nzg1MTQsImV4cCI6MjA1OTQ1NDUxNH0.t1YFTLGBzFfkFr0V6MAU6TDXgYbmNU6JzHwwDqTZYS0
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 ```
 
 ### 2. Set Up Database Schema
